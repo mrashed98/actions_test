@@ -65,6 +65,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${{ inputs.release-tag || github.event.release.tag_name }}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release $tag does not exist"
+            exit 1
+          fi
           gh release upload "$tag" \
             "${{ inputs.artifact-name || 'sbom' }}.spdx.json" \
             "${{ inputs.artifact-name || 'sbom' }}.cyclonedx.json" \
