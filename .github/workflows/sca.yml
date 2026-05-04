@@ -1,4 +1,4 @@
-name: SCA
+name: Software compostion analysis
 
 on:
   push:
@@ -6,8 +6,9 @@ on:
       - main
       - master
   pull_request:
+  workflow_call:
   schedule:
-    - cron: '0 7 * * 1'
+    - cron: '0 7 * * 0'
 
 jobs:
   dependency-review:
