@@ -1,0 +1,28 @@
+"go":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.go"
+
+"dependencies":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "go.mod"
+          - "go.sum"
+
+"ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/**"
+
+"documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "mkdocs.yml"
+          - "*.md"
+
+"test":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*_test.go"

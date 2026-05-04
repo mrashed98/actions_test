@@ -1,0 +1,72 @@
+name: PR Checklist
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PR Checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check all checklist items are ticked
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const marker = '<!-- pr-checklist-comment -->';
+
+            if (!body.trim()) {
+              const emptyBody = `${marker}\n❌ **PR Checklist:** PR description is empty. Please fill in the PR template.`;
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: emptyBody,
+              });
+              core.setFailed('PR description is empty.');
+              return;
+            }
+
+            const unchecked = (body.match(/- \[ \]/g) || []).length;
+
+            const icon = unchecked === 0 ? '✅' : '❌';
+            const msg = unchecked === 0
+              ? 'All checklist items completed.'
+              : `${unchecked} checklist item(s) not completed. Tick all boxes in the PR description before merging.`;
+            const commentBody = `${marker}\n${icon} **PR Checklist:** ${msg}`;
+
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody,
+            });
+
+            if (unchecked > 0) {
+              core.setFailed(`${unchecked} checklist item(s) not completed.`);
+            }

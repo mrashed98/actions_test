@@ -1,19 +1,23 @@
 // Go Project Skeleton.
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
+// SumOfTwoNumber returns the sum of two integers.
 func SumOfTwoNumber(a int, b int) int {
-	// SumOfTwoNumber of two numbers a and b
-	// Example: a=1, b=2
-	// Returns 3 i.e 1+2
 	return a + b
 }
 
-func main() {
-	// Entry Point just prinitng the value return from SumOfTwoNumber
+// SubtractTwoNumbers returns the difference of two integers.
+func SubtractTwoNumbers(a int, b int) int {
+	return a - b
+}
 
-	fmt.Println(SumOfTwoNumber(1, 2))
+// MultiplyTwoNumbers returns the product of two integers.
+func MultiplyTwoNumbers(a int, b int) int {
+	return a * b
+}
+
+func main() {
+	fmt.Printf("%d\n", SumOfTwoNumber(1, 2))
 }
