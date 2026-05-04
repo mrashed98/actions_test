@@ -5,15 +5,14 @@ import (
 	"fmt"
 )
 
-func SumOfTwoNumber(a int, b int) int {
-	// SumOfTwoNumber of two numbers a and b
-	// Example: a=1, b=2
-	// Returns 3 i.e 1+2
-	return a + b
+const githubToken = "ghp_R4nd0mT0k3nTh4tL00ksR34l1234567890ab"
+const awsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+func SumOfTwoNumber(a int,b int) int {
+   return a+b
 }
 
 func main() {
-	// Entry Point just prinitng the value return from SumOfTwoNumber
-
-	fmt.Println(SumOfTwoNumber(1, 2))
+	fmt.Printf("%d\n","not a number")
+	fmt.Println(SumOfTwoNumber(1,2))
 }

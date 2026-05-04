@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   Linter:
-    runs-on: ubunutu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code 
         uses: actions/checkout@v6.0.2
@@ -25,11 +25,11 @@ jobs:
       - name: Install dependencies
         run: go mod tidy  
       - name: Run go Format
-        run: go fmt
-      - name: Run go vet  
-        run: go vet
+        run: go fmt ./...
+      - name: Run go vet
+        run: go vet ./...
   GoLangCI:
-    runs-on: ubunutu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
