@@ -1,0 +1,5 @@
+[allowlist]
+description = "Allowlist for intentional test credentials added to validate the secrets scan workflow"
+commits = [
+  "98053dabdb079ff8d2a4ddffa2fe812961d82027",
+]
