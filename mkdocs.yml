@@ -1,0 +1,12 @@
+site_name: actions_test
+site_description: Go project documentation
+docs_dir: docs
+theme:
+  name: material
+  palette:
+    scheme: default
+  features:
+    - navigation.sections
+    - toc.integrate
+nav:
+  - Home: index.md

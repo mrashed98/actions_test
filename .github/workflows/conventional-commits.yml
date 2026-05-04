@@ -1,0 +1,63 @@
+name: Conventional Commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check PR title format
+        id: title-check
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = context.payload.pull_request.title;
+            const types = 'feat|fix|docs?|perf|refactor|ci|chore|test|build|revert';
+            // Required format: [PROJ-123] type(optional-scope): description
+            const pattern = new RegExp(`^\\[[A-Z]+-[0-9]+\\] (${types})(\\([^)]+\\))?: .+`);
+            const valid = pattern.test(title);
+
+            const marker = '<!-- conventional-commits-comment -->';
+            const icon = valid ? '✅' : '❌';
+            const msg = valid
+              ? `\`${title}\` matches required format.`
+              : `\`${title}\` does not match required format.\n\n**Required:** \`[PROJ-123] type(optional-scope): description\`\n\n**Valid types:** \`feat\` \`fix\` \`doc\` \`perf\` \`refactor\` \`ci\` \`chore\` \`test\` \`build\` \`revert\`\n\n**Examples:**\n- \`[PROJ-123] feat: add login endpoint\`\n- \`[AUTH-456] fix(token): resolve expiry bug\``;
+            const body = `${marker}\n${icon} **Conventional Commits:** ${msg}`;
+
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+            if (!valid) {
+              core.setFailed(`PR title does not follow required format: ${title}`);
+            }
