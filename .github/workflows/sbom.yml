@@ -1,55 +1,75 @@
-name: SBOM
+name: Software Bill of Material Generation
 
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: false
+        type: string
+        default: 'sbom'
+        description: 'Base name for SBOM output files (e.g. my-app → my-app.spdx.json)'
+      release-tag:
+        required: false
+        type: string
+        default: ''
+        description: 'Release tag to attach SBOM assets to. Pass github.event.release.tag_name from caller.'
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  sbom:
+  generate:
     name: Generate SBOM
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
-      packages: read
+      id-token: write
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 1
 
-      - name: Setup Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
-        with:
-          go-version: '1.26.2'
-
-      - name: Cache Go modules
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Generate CycloneDX SBOM
-        uses: anchore/sbom-action@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
-        with:
-          format: cyclonedx-json
-          output-file: sbom.cyclonedx.json
-          upload-artifact: false
-
       - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
+          output-file: ${{ inputs.artifact-name || 'sbom' }}.spdx.json
+          artifact-name: ${{ inputs.artifact-name || 'sbom' }}.spdx.json
+          upload-artifact: true
+          upload-release-assets: false
+          dependency-snapshot: true
 
-      - name: Attach SBOMs to release
-        uses: softprops/action-gh-release@d5382d3e6f2fa7bd53cb749d33091853d4985daf # v2.3.0
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          files: |
-            sbom.cyclonedx.json
-            sbom.spdx.json
+          format: cyclonedx-json
+          output-file: ${{ inputs.artifact-name || 'sbom' }}.cyclonedx.json
+          artifact-name: ${{ inputs.artifact-name || 'sbom' }}.cyclonedx.json
+          upload-artifact: true
+          upload-release-assets: false
+          dependency-snapshot: false
+
+      - name: Attach to release
+        if: github.event_name == 'release' || inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ inputs.release-tag || github.event.release.tag_name }}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release $tag does not exist"
+            exit 1
+          fi
+          gh release upload "$tag" \
+            "${{ inputs.artifact-name || 'sbom' }}.spdx.json" \
+            "${{ inputs.artifact-name || 'sbom' }}.cyclonedx.json" \
+            --clobber
