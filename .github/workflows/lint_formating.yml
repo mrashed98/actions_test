@@ -38,15 +38,32 @@ jobs:
       - name: Post fmt comment
         if: failure() && steps.fmt.outcome == 'failure'
         uses: actions/github-script@v7
+        env:
+          FMT_OUTPUT: ${{ steps.fmt.outputs.output }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            github.rest.issues.createComment({
+            const marker = '<!-- go-fmt-comment -->';
+            const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `❌ **go fmt** found formatting issues in:\n\`\`\`\n${{ steps.fmt.outputs.output }}\n\`\`\`\nRun \`gofmt -w ./...\` to fix.`
-            })
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${marker}\n❌ **go fmt** found formatting issues in:\n\`\`\`\n${process.env.FMT_OUTPUT}\n\`\`\`\nRun \`gofmt -w ./...\` to fix.`
+            });
       - name: Run go vet
         id: vet
         run: |
@@ -62,15 +79,32 @@ jobs:
       - name: Post vet comment
         if: failure() && steps.vet.outcome == 'failure'
         uses: actions/github-script@v7
+        env:
+          VET_OUTPUT: ${{ steps.vet.outputs.output }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            github.rest.issues.createComment({
+            const marker = '<!-- go-vet-comment -->';
+            const comments = await github.rest.issues.listComments({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `❌ **go vet** found issues:\n\`\`\`\n${{ steps.vet.outputs.output }}\n\`\`\``
-            })
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${marker}\n❌ **go vet** found issues:\n\`\`\`\n${process.env.VET_OUTPUT}\n\`\`\``
+            });
   GoLangCI:
     runs-on: ubuntu-latest
     steps:
