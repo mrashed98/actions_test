@@ -1,0 +1,42 @@
+name: SBOM
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version: '1.26.2'
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0.17.9
+        with:
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: false
+
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0.17.9
+        with:
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - name: Attach SBOMs to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sbom.cyclonedx.json
+            sbom.spdx.json
