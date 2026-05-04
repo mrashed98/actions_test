@@ -6,7 +6,7 @@ import (
 )
 
 const githubToken = "ghp_R4nd0mT0k3nTh4tL00ksR34l1234567890ab"
-const awsSecret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+const awsAccessKeyID = "AKIAY3LNS6WNN3S7GX4Q"
 
 func SumOfTwoNumber(a int,b int) int {
    return a+b
