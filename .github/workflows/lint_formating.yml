@@ -66,6 +66,7 @@ jobs:
             });
       - name: Run go vet
         id: vet
+        if: always()
         run: |
           set +e
           output=$(go vet ./... 2>&1)
