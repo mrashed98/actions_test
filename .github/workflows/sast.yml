@@ -46,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
@@ -58,14 +59,27 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
-      - name: Test coverage
+      - name: Run tests with coverage
+        id: test-coverage
         run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./...
-          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
-          echo "Total coverage: ${COVERAGE}%"
-          if awk "BEGIN {exit !($COVERAGE < 70)}"; then
-            echo "::error::Test coverage ${COVERAGE}% is below threshold of 70%"
-            exit 1
+          if go test -race -coverprofile=coverage.out -covermode=atomic ./... 2>&1; then
+            BUILD_OK=true
+          else
+            BUILD_OK=false
+          fi
+          if [ -f coverage.out ]; then
+            COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          else
+            COVERAGE="0"
+          fi
+          echo "coverage=${COVERAGE}" >> "$GITHUB_OUTPUT"
+          echo "build_ok=${BUILD_OK}" >> "$GITHUB_OUTPUT"
+          if [ "${BUILD_OK}" = "false" ]; then
+            echo "status=build_failed" >> "$GITHUB_OUTPUT"
+          elif awk "BEGIN {exit !(${COVERAGE} < 70)}"; then
+            echo "status=below_threshold" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=passed" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload coverage report
@@ -76,19 +90,118 @@ jobs:
           path: coverage.out
           if-no-files-found: warn
 
+      - name: Post test coverage comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          COVERAGE: ${{ steps.test-coverage.outputs.coverage }}
+          COVERAGE_STATUS: ${{ steps.test-coverage.outputs.status }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- test-coverage-comment -->';
+            const coverage = process.env.COVERAGE || '0';
+            const status = process.env.COVERAGE_STATUS;
+            let icon, msg;
+            if (status === 'passed') {
+              icon = '✅'; msg = `${coverage}%`;
+            } else if (status === 'below_threshold') {
+              icon = '❌'; msg = `${coverage}% (below 70% threshold)`;
+            } else {
+              icon = '❌'; msg = 'Build failed — no coverage data';
+            }
+            const body = `${marker}\n${icon} **Test Coverage:** ${msg}`;
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail if coverage check did not pass
+        if: steps.test-coverage.outputs.status != 'passed'
+        run: |
+          echo "::error::Test coverage check failed: ${{ steps.test-coverage.outputs.status }} (${{ steps.test-coverage.outputs.coverage }}%)"
+          exit 1
+
       - name: Install revive
+        if: always()
         run: go install github.com/mgechev/revive@v1.5.1
 
       - name: Doc coverage (exported symbols)
+        id: doc-coverage
+        if: always()
         run: |
           cat > /tmp/revive-exported.toml << 'EOF'
           [rule.exported]
             severity = "error"
             arguments = ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
           EOF
+          set +e
           revive -config /tmp/revive-exported.toml -formatter friendly ./... 2>&1 | tee /tmp/revive-output.txt
+          set -e
           VIOLATIONS=$(wc -l < /tmp/revive-output.txt | tr -d ' ')
+          echo "violations=${VIOLATIONS}" >> "$GITHUB_OUTPUT"
           if [ "$VIOLATIONS" -gt 0 ]; then
-            echo "::error::${VIOLATIONS} exported symbol(s) have documentation issues"
-            exit 1
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=passed" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Post doc coverage comment
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          DOC_STATUS: ${{ steps.doc-coverage.outputs.status }}
+          DOC_VIOLATIONS: ${{ steps.doc-coverage.outputs.violations }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- doc-coverage-comment -->';
+            const status = process.env.DOC_STATUS;
+            const violations = process.env.DOC_VIOLATIONS || '0';
+            const icon = status === 'passed' ? '✅' : '❌';
+            const msg = status === 'passed'
+              ? 'All exported symbols documented'
+              : `${violations} exported symbol(s) missing documentation`;
+            const body = `${marker}\n${icon} **Doc Coverage:** ${msg}`;
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            for (const c of comments.data) {
+              if (c.user.login === 'github-actions[bot]' && c.body.includes(marker)) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: c.id,
+                });
+              }
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail if doc issues found
+        if: always() && steps.doc-coverage.outputs.status == 'failed'
+        run: |
+          echo "::error::${{ steps.doc-coverage.outputs.violations }} exported symbol(s) have documentation issues"
+          exit 1
