@@ -7,16 +7,15 @@ on:
       - master
   pull_request:
 
-permissions:
-  security-events: write
-  contents: read
-  pull-requests: read
-  actions: read
-
 jobs:
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      pull-requests: read
+      actions: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
@@ -45,6 +44,8 @@ jobs:
   coverage:
     name: Test & Doc Coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6.0.2
@@ -73,9 +74,10 @@ jobs:
         with:
           name: coverage-report
           path: coverage.out
+          if-no-files-found: warn
 
       - name: Install revive
-        run: go install github.com/mgechev/revive@latest
+        run: go install github.com/mgechev/revive@v1.5.1
 
       - name: Doc coverage (exported symbols)
         run: |
@@ -85,9 +87,8 @@ jobs:
             arguments = ["checkPrivateReceivers", "sayRepetitiveInsteadOfStutters"]
           EOF
           revive -config /tmp/revive-exported.toml -formatter friendly ./... 2>&1 | tee /tmp/revive-output.txt
-          if grep -q "exported .* should have comment" /tmp/revive-output.txt; then
-            MISSING=$(grep -c "exported .* should have comment" /tmp/revive-output.txt || true)
-            echo "::error::${MISSING} exported symbol(s) missing documentation"
-            cat /tmp/revive-output.txt
+          VIOLATIONS=$(wc -l < /tmp/revive-output.txt | tr -d ' ')
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo "::error::${VIOLATIONS} exported symbol(s) have documentation issues"
             exit 1
           fi
